@@ -883,20 +883,15 @@ input:checked + .slider-switch:before { transform: translateX(20px); background-
       </div>
     </div>
 
-    <div class="card card-gauge" data-card="pelletLevel" id="pelletCard" style="display:none">
+    <div class="card" data-card="pelletLevel" id="pelletCard" style="display:none">
       <div class="card-tools"></div>
       <div class="card-header">
         <span id="lblPelletCardHeader">Pellet-Tank</span>
         <span class="ic-slot" data-ic="package"></span>
       </div>
       <div class="card-val">
-        <span id="pelletLevelPct">--</span><span class="unit">%</span>
+        <span id="pelletRemainingKg">--</span><span class="unit">kg</span>
         <span class="card-target" id="pelletLowWarn" style="display:none;color:#ef4444;font-size:0.8rem">⚠️ <span id="lblPelletLowWarnText"></span></span>
-      </div>
-      <div class="progress-bar"><div class="progress-fill" id="pelletBar" style="width:0%"></div></div>
-      <div style="display:flex;justify-content:space-between;font-size:0.75rem;color:var(--text-dim);margin-top:4px">
-        <span><span id="lblPelletRemaining"></span> <b id="pelletRemainingKg">--</b> kg</span>
-        <span><span id="lblPelletDistance"></span> <b id="pelletDistanceCm">--</b> cm</span>
       </div>
     </div>
 
@@ -5810,21 +5805,12 @@ async function tick() {
       const pelAvail = !!(pel && pel.available);
       pelCard.style.display = pelAvail ? '' : 'none';
       if (pelAvail) {
-        const pct = pel.level_percent;
         const kg = pel.remaining_kg;
-        const dist = pel.distance_cm;
         const isLow = !!pel.low_level;
 
-        document.getElementById('pelletLevelPct').textContent = pct != null ? pct.toLocaleString(bcpLanguageTag, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '--';
-        document.getElementById('pelletRemainingKg').textContent = kg != null ? kg.toLocaleString(bcpLanguageTag, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '--';
-        document.getElementById('pelletDistanceCm').textContent = dist != null ? dist.toLocaleString(bcpLanguageTag, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '--';
+        const elKg = document.getElementById('pelletRemainingKg');
+        if (elKg) elKg.textContent = kg != null ? kg.toLocaleString(bcpLanguageTag, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '--';
 
-        const barPct = pct != null ? Math.min(100, Math.max(0, Math.round(pct))) : 0;
-        const pBar = document.getElementById('pelletBar');
-        if (pBar) {
-          pBar.style.width = barPct + '%';
-          pBar.classList.toggle('low', isLow);
-        }
         const warn = document.getElementById('pelletLowWarn');
         if (warn) warn.style.display = isLow ? '' : 'none';
       }

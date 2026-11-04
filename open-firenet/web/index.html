@@ -883,6 +883,23 @@ input:checked + .slider-switch:before { transform: translateX(20px); background-
       </div>
     </div>
 
+    <div class="card card-gauge" data-card="pelletLevel" id="pelletCard" style="display:none">
+      <div class="card-tools"></div>
+      <div class="card-header">
+        <span id="lblPelletCardHeader">Pellet-Tank</span>
+        <span class="ic-slot" data-ic="package"></span>
+      </div>
+      <div class="card-val">
+        <span id="pelletLevelPct">--</span><span class="unit">%</span>
+        <span class="card-target" id="pelletLowWarn" style="display:none;color:#ef4444;font-size:0.8rem">⚠️ <span id="lblPelletLowWarnText"></span></span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="pelletBar" style="width:0%"></div></div>
+      <div style="display:flex;justify-content:space-between;font-size:0.75rem;color:var(--text-dim);margin-top:4px">
+        <span><span id="lblPelletRemaining"></span> <b id="pelletRemainingKg">--</b> kg</span>
+        <span><span id="lblPelletDistance"></span> <b id="pelletDistanceCm">--</b> cm</span>
+      </div>
+    </div>
+
     <div class="card" data-card="runtime">
       <div class="card-tools"></div>
       <div class="card-header">
@@ -1466,6 +1483,38 @@ input:checked + .slider-switch:before { transform: translateX(20px); background-
       </div>
       <div style="font-size:0.75rem;color:var(--text-dim)" id="lblTxGapHelp">Appliqué immédiatement et conservé après redémarrage. Trop bas : le poêle peut ne traiter qu'une trame sur deux.</div>
     </div>
+    <div class="card" style="gap:12px" id="pelletConfigCard">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <h3 id="lblPelletConfigTitle">Pellet-Füllstandssensor (VL53L0X)</h3>
+        <label class="switch">
+          <input type="checkbox" id="pelletEnabled">
+          <span class="slider-switch"></span>
+        </label>
+      </div>
+      <p id="lblPelletConfigDesc" style="font-size:0.85rem;color:var(--text-dim);margin:0"></p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <label style="flex:1;min-width:130px;display:flex;flex-direction:column;gap:4px;font-size:0.8rem;color:var(--text-dim)"><span id="lblPelletSda">Broche SDA</span>
+          <input class="input-text" id="pelletSda" type="number" min="1" max="48" value="9"></label>
+        <label style="flex:1;min-width:130px;display:flex;flex-direction:column;gap:4px;font-size:0.8rem;color:var(--text-dim)"><span id="lblPelletScl">Broche SCL</span>
+          <input class="input-text" id="pelletScl" type="number" min="1" max="48" value="18"></label>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <label style="flex:1;min-width:130px;display:flex;flex-direction:column;gap:4px;font-size:0.8rem;color:var(--text-dim)"><span id="lblPelletTankHeight">Hauteur réservoir (cm)</span>
+          <input class="input-text" id="pelletTankHeight" type="number" step="0.5" min="10" max="300" value="70"></label>
+        <label style="flex:1;min-width:130px;display:flex;flex-direction:column;gap:4px;font-size:0.8rem;color:var(--text-dim)"><span id="lblPelletMinDist">Distance min (plein) (cm)</span>
+          <input class="input-text" id="pelletMinDist" type="number" step="0.1" min="0" max="100" value="0.5"></label>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <label style="flex:1;min-width:130px;display:flex;flex-direction:column;gap:4px;font-size:0.8rem;color:var(--text-dim)"><span id="lblPelletCapacity">Capacité (kg)</span>
+          <input class="input-text" id="pelletCapacity" type="number" step="1" min="1" max="500" value="45"></label>
+        <label style="flex:1;min-width:130px;display:flex;flex-direction:column;gap:4px;font-size:0.8rem;color:var(--text-dim)"><span id="lblPelletLowThreshold">Seuil alerte bas (%)</span>
+          <input class="input-text" id="pelletLowThreshold" type="number" step="1" min="0" max="100" value="20"></label>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+        <span id="pelletSaveNote" style="font-size:0.8rem;color:var(--text-dim)"></span>
+        <button type="button" class="power-btn" id="btnSavePellet" style="padding:6px 16px;font-size:0.85rem" onclick="savePelletConfig()">Enregistrer</button>
+      </div>
+    </div>
     <div class="card" style="gap:12px" id="logSizeCard">
       <h3 id="lblLogSizeTitle"></h3>
       <p id="lblLogSizeDesc" style="font-size:0.85rem;color:var(--text-dim);margin:0"></p>
@@ -1650,6 +1699,21 @@ const I18N = {
     flameHeader: "T° flamme",
     powerHeader: "Puissance",
     pelletsHeader: "Granulés",
+    pelletCardTitle: "Réservoir à pellets",
+    pelletRemaining: "Restant :",
+    pelletDistance: "Dist. :",
+    pelletLowWarn: "Remplissage requis",
+    pelletConfigTitle: "Capteur de niveau de pellets (VL53L0X)",
+    pelletConfigDesc: "Capteur de distance ToF optionnel pour le niveau du réservoir.",
+    pelletEnabled: "Activer le capteur",
+    pelletSdaPin: "Broche SDA",
+    pelletSclPin: "Broche SCL",
+    pelletTankHeight: "Hauteur réservoir (cm)",
+    pelletMinDist: "Distance min (plein) (cm)",
+    pelletCapacity: "Capacité (kg)",
+    pelletLowThreshold: "Seuil d'alerte bas (%)",
+    pelletSave: "Enregistrer",
+    pelletSaved: "Paramètres enregistrés",
     serviceHeader: "Entretien dans",
     ignitionsHeader: "Allumages",
     runtimeHeader: "Fonctionnement",
@@ -2004,6 +2068,21 @@ const I18N = {
     flameHeader: "Flame temp.",
     powerHeader: "Power",
     pelletsHeader: "Pellets",
+    pelletCardTitle: "Pellet Tank",
+    pelletRemaining: "Remaining:",
+    pelletDistance: "Dist.:",
+    pelletLowWarn: "Refill needed",
+    pelletConfigTitle: "Pellet Level Sensor (VL53L0X)",
+    pelletConfigDesc: "Optional ToF distance sensor for pellet tank fill level.",
+    pelletEnabled: "Enable sensor",
+    pelletSdaPin: "SDA Pin",
+    pelletSclPin: "SCL Pin",
+    pelletTankHeight: "Tank height (cm)",
+    pelletMinDist: "Min distance (full) (cm)",
+    pelletCapacity: "Tank capacity (kg)",
+    pelletLowThreshold: "Low alert threshold (%)",
+    pelletSave: "Save",
+    pelletSaved: "Settings saved",
     serviceHeader: "Service in",
     ignitionsHeader: "Ignitions",
     runtimeHeader: "Running time",
@@ -2358,6 +2437,21 @@ const I18N = {
     "flameHeader": "T° fiamma",
     "powerHeader": "Potenza",
     "pelletsHeader": "Pellet",
+    "pelletCardTitle": "Serbatoio pellet",
+    "pelletRemaining": "Rimanente:",
+    "pelletDistance": "Dist.:",
+    "pelletLowWarn": "Rifornimento necessario",
+    "pelletConfigTitle": "Sensore livello pellet (VL53L0X)",
+    "pelletConfigDesc": "Sensore di distanza ToF opzionale per il livello del serbatoio.",
+    "pelletEnabled": "Attiva sensore",
+    "pelletSdaPin": "Pin SDA",
+    "pelletSclPin": "Pin SCL",
+    "pelletTankHeight": "Altezza serbatoio (cm)",
+    "pelletMinDist": "Distanza min (pieno) (cm)",
+    "pelletCapacity": "Capacità serbatoio (kg)",
+    "pelletLowThreshold": "Soglia di avviso basso (%)",
+    "pelletSave": "Salva",
+    "pelletSaved": "Impostazioni salvate",
     "serviceHeader": "Manutenzione tra",
     "ignitionsHeader": "Accensioni",
     "runtimeHeader": "Funzionamento",
@@ -2772,6 +2866,21 @@ const I18N = {
     flameHeader: "Flammentemp.",
     powerHeader: "Leistung",
     pelletsHeader: "Pellets",
+    pelletCardTitle: "Pellet-Tank",
+    pelletRemaining: "Restmenge:",
+    pelletDistance: "Distanz:",
+    pelletLowWarn: "Nachfüllen erforderlich",
+    pelletConfigTitle: "Pellet-Füllstandssensor (VL53L0X)",
+    pelletConfigDesc: "Optionaler ToF-Distanzsensor für den Pellet-Füllstand.",
+    pelletEnabled: "Sensor aktivieren",
+    pelletSdaPin: "SDA-Pin",
+    pelletSclPin: "SCL-Pin",
+    pelletTankHeight: "Tankhöhe (cm)",
+    pelletMinDist: "Mindestabstand (voll) (cm)",
+    pelletCapacity: "Tankkapazität (kg)",
+    pelletLowThreshold: "Warnschwelle (%)",
+    pelletSave: "Speichern",
+    pelletSaved: "Einstellungen gespeichert",
     serviceHeader: "Wartung in",
     ignitionsHeader: "Zündungen",
     runtimeHeader: "Betriebszeit",
@@ -3126,6 +3235,21 @@ const I18N = {
     flameHeader: "Temp. llama",
     powerHeader: "Potencia",
     pelletsHeader: "Pellets",
+    pelletCardTitle: "Depósito de pellets",
+    pelletRemaining: "Restante:",
+    pelletDistance: "Dist.:",
+    pelletLowWarn: "Relleno necesario",
+    pelletConfigTitle: "Sensor de nivel de pellets (VL53L0X)",
+    pelletConfigDesc: "Sensor de distancia ToF opcional para el nivel del depósito.",
+    pelletEnabled: "Activar sensor",
+    pelletSdaPin: "Pin SDA",
+    pelletSclPin: "Pin SCL",
+    pelletTankHeight: "Altura del depósito (cm)",
+    pelletMinDist: "Distancia mín (lleno) (cm)",
+    pelletCapacity: "Capacidad del depósito (kg)",
+    pelletLowThreshold: "Umbral de alerta bajo (%)",
+    pelletSave: "Guardar",
+    pelletSaved: "Ajustes guardados",
     serviceHeader: "Servicio en",
     ignitionsHeader: "Encendidos",
     runtimeHeader: "Tiempo de funcionamiento",
@@ -3513,6 +3637,19 @@ function applyLang() {
   document.getElementById('lblFlameHeader').textContent = t.flameHeader;
   document.getElementById('lblPowerHeader').textContent = t.powerHeader;
   document.getElementById('lblPelletsHeader').textContent = t.pelletsHeader;
+  if (document.getElementById('lblPelletCardHeader')) document.getElementById('lblPelletCardHeader').textContent = t.pelletCardTitle;
+  if (document.getElementById('lblPelletRemaining')) document.getElementById('lblPelletRemaining').textContent = t.pelletRemaining;
+  if (document.getElementById('lblPelletDistance')) document.getElementById('lblPelletDistance').textContent = t.pelletDistance;
+  if (document.getElementById('lblPelletLowWarnText')) document.getElementById('lblPelletLowWarnText').textContent = t.pelletLowWarn;
+  if (document.getElementById('lblPelletConfigTitle')) document.getElementById('lblPelletConfigTitle').textContent = t.pelletConfigTitle;
+  if (document.getElementById('lblPelletConfigDesc')) document.getElementById('lblPelletConfigDesc').textContent = t.pelletConfigDesc;
+  if (document.getElementById('lblPelletSda')) document.getElementById('lblPelletSda').textContent = t.pelletSdaPin;
+  if (document.getElementById('lblPelletScl')) document.getElementById('lblPelletScl').textContent = t.pelletSclPin;
+  if (document.getElementById('lblPelletTankHeight')) document.getElementById('lblPelletTankHeight').textContent = t.pelletTankHeight;
+  if (document.getElementById('lblPelletMinDist')) document.getElementById('lblPelletMinDist').textContent = t.pelletMinDist;
+  if (document.getElementById('lblPelletCapacity')) document.getElementById('lblPelletCapacity').textContent = t.pelletCapacity;
+  if (document.getElementById('lblPelletLowThreshold')) document.getElementById('lblPelletLowThreshold').textContent = t.pelletLowThreshold;
+  if (document.getElementById('btnSavePellet')) document.getElementById('btnSavePellet').textContent = t.pelletSave;
   document.getElementById('lblServiceHeader').textContent = t.serviceHeader;
   Object.keys(APPLY_BUTTONS).forEach((id) => { const b = document.getElementById(id); if (b && !b.dataset.busy) b.textContent = t.btnApply; });
   document.getElementById('lblRuntimeHeader').textContent = t.runtimeHeader;
@@ -4053,6 +4190,48 @@ async function setTxGap(ms) {
     document.getElementById('txGap').addEventListener('input', e => setTxGap(e.target.value));
   } catch (e) { /* ignoré */ }
 })();
+
+let _pelletSaveTimer = null;
+async function initPelletConfig() {
+  try {
+    const j = await (await fetch('/api/pellet')).json();
+    const box = document.getElementById('pelletEnabled');
+    if (box) box.checked = !!j.enabled;
+    const sda = document.getElementById('pelletSda'); if (sda) sda.value = j.sda_pin;
+    const scl = document.getElementById('pelletScl'); if (scl) scl.value = j.scl_pin;
+    const h = document.getElementById('pelletTankHeight'); if (h) h.value = j.tank_height_cm;
+    const md = document.getElementById('pelletMinDist'); if (md) md.value = j.min_distance_cm;
+    const cap = document.getElementById('pelletCapacity'); if (cap) cap.value = j.capacity_kg;
+    const low = document.getElementById('pelletLowThreshold'); if (low) low.value = j.low_threshold_percent;
+  } catch (e) { /* ignored */ }
+}
+async function savePelletConfig() {
+  const t = I18N[curLang] || I18N.en;
+  const note = document.getElementById('pelletSaveNote');
+  try {
+    const body = {
+      enabled: document.getElementById('pelletEnabled').checked,
+      sda_pin: parseInt(document.getElementById('pelletSda').value, 10),
+      scl_pin: parseInt(document.getElementById('pelletScl').value, 10),
+      tank_height_cm: parseFloat(document.getElementById('pelletTankHeight').value),
+      min_distance_cm: parseFloat(document.getElementById('pelletMinDist').value),
+      capacity_kg: parseFloat(document.getElementById('pelletCapacity').value),
+      low_threshold_percent: parseFloat(document.getElementById('pelletLowThreshold').value)
+    };
+    const r = await fetch('/api/pellet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (r.ok) {
+      if (note) { note.textContent = t.pelletSaved || 'Saved'; note.style.color = 'var(--green)'; }
+      initPelletConfig();
+    } else {
+      if (note) { note.textContent = 'Error'; note.style.color = '#ef4444'; }
+    }
+  } catch (e) {
+    if (note) { note.textContent = 'Error'; note.style.color = '#ef4444'; }
+  }
+  clearTimeout(_pelletSaveTimer);
+  _pelletSaveTimer = setTimeout(() => { if (note) note.textContent = ''; }, 3000);
+}
+initPelletConfig();
 
 let lastUpdateState = null;
 let _updatePollTimer = null;
@@ -5128,8 +5307,8 @@ function renderHealth(s) {
 // beside the tall controls. Inside a line the blocks are laid out in narrow rows (masonry): a block takes the rows its
 // height needs, so blocks of one column stack. Kept in this browser only (like the MultiAir choice); without storage
 // the page keeps its default layout.
-const CARD_IDS = ['hero', 'room', 'flame', 'power', 'pellets', 'runtime', 'logruntime', 'service', 'ignitions', 'deck'];
-const CARD_DEFAULT_LINES = [['hero'], ['room', 'flame', 'power', 'pellets', 'runtime', 'logruntime', 'service', 'ignitions'], ['deck']];
+const CARD_IDS = ['hero', 'room', 'flame', 'power', 'pellets', 'pelletLevel', 'runtime', 'logruntime', 'service', 'ignitions', 'deck'];
+const CARD_DEFAULT_LINES = [['hero'], ['room', 'flame', 'power', 'pellets', 'pelletLevel', 'runtime', 'logruntime', 'service', 'ignitions'], ['deck']];
 const CARD_COLS_MIN = 4, CARD_COLS_MAX = 8;               // the controls need four columns, which is the page as it was
 const CARD_SPAN = { hero: [3, 8, 4], deck: [4, 8, 4] };   // id: [narrowest, widest, default] in columns; the others are 1 to 8, default 1
 const CARD_NOHIDE = ['hero', 'deck'];                     // the state block and the controls cannot be hidden
@@ -5623,6 +5802,33 @@ async function tick() {
     sBar.style.width = sPct + '%';
     sBar.classList.toggle('low', sPct < 20);
     sBar.parentElement.title = t.serviceBarTitle + (sCount == null ? '--' : sCount.toLocaleString(bcpLanguageTag)) + ' / ' + sInterval.toLocaleString(bcpLanguageTag) + ' kg';
+
+    // Pellet Tank Level (VL53L0X)
+    const pelCard = document.getElementById('pelletCard');
+    if (pelCard) {
+      const pel = s.pellet;
+      const pelAvail = !!(pel && pel.available);
+      pelCard.style.display = pelAvail ? '' : 'none';
+      if (pelAvail) {
+        const pct = pel.level_percent;
+        const kg = pel.remaining_kg;
+        const dist = pel.distance_cm;
+        const isLow = !!pel.low_level;
+
+        document.getElementById('pelletLevelPct').textContent = pct != null ? pct.toLocaleString(bcpLanguageTag, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '--';
+        document.getElementById('pelletRemainingKg').textContent = kg != null ? kg.toLocaleString(bcpLanguageTag, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '--';
+        document.getElementById('pelletDistanceCm').textContent = dist != null ? dist.toLocaleString(bcpLanguageTag, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '--';
+
+        const barPct = pct != null ? Math.min(100, Math.max(0, Math.round(pct))) : 0;
+        const pBar = document.getElementById('pelletBar');
+        if (pBar) {
+          pBar.style.width = barPct + '%';
+          pBar.classList.toggle('low', isLow);
+        }
+        const warn = document.getElementById('pelletLowWarn');
+        if (warn) warn.style.display = isLow ? '' : 'none';
+      }
+    }
 
     // Model & Net
     const modelNames = {

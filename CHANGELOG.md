@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## Non publié
 
 ### New
 - Optional pellet hopper level measurement using a VL53L0X Time-of-Flight distance sensor over I2C. Disabled by default in NVS (`enabled: false`), with configurable SDA and SCL pins (default GPIO9 and GPIO18), tank height, minimum distance, tank capacity in kg, and low pellet threshold percentage.

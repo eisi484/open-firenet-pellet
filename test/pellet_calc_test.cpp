@@ -68,6 +68,22 @@ int main() {
     CH("reference 49.3cm: level_percent ~ 29.8%", std::abs(r2.level_percent - 29.8f) <= 0.1f);
   }
 
+  // --- 2b. Live calibrated case: 40 kg tank, 65.0 cm height, 10.3 cm min_dist
+  {
+    PelletConfig cfg; // uses defaults: 65.0 cm, 10.3 cm, 40.0 kg
+    PelletResult empty = calculatePelletLevel(65.0f, cfg);
+    CH("live: 65.0 cm is 0.0%", std::abs(empty.level_percent - 0.0f) < 0.1f);
+    CH("live: 65.0 cm is 0.0 kg", std::abs(empty.remaining_kg - 0.0f) < 0.1f);
+
+    PelletResult refill30 = calculatePelletLevel(24.1f, cfg);
+    CH("live: 24.1 cm is ~74.8%", std::abs(refill30.level_percent - 74.8f) < 0.5f);
+    CH("live: 24.1 cm is ~29.9 kg", std::abs(refill30.remaining_kg - 29.9f) < 0.5f);
+
+    PelletResult full = calculatePelletLevel(10.3f, cfg);
+    CH("live: 10.3 cm is 100.0%", std::abs(full.level_percent - 100.0f) < 0.1f);
+    CH("live: 10.3 cm is 40.0 kg", std::abs(full.remaining_kg - 40.0f) < 0.1f);
+  }
+
   // --- 3. Clamping and low threshold
   {
     PelletConfig cfg;

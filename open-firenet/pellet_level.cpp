@@ -238,11 +238,11 @@ void PelletManager::loadFromNvs(Preferences& prefs) {
   PelletConfig cfg;
   prefs.begin("firenet", true);
   cfg.enabled = prefs.getBool("pel_en", false);
-  cfg.sda_pin = prefs.getInt("pel_sda", 9);
-  cfg.scl_pin = prefs.getInt("pel_scl", 18);
-  cfg.tank_height_cm = prefs.getFloat("pel_h", 70.0f);
-  cfg.min_distance_cm = prefs.getFloat("pel_min", 0.5f);
-  cfg.capacity_kg = prefs.getFloat("pel_kg", 45.0f);
+  cfg.sda_pin = prefs.getInt("pel_sda", 2);
+  cfg.scl_pin = prefs.getInt("pel_scl", 4);
+  cfg.tank_height_cm = prefs.getFloat("pel_h", 65.0f);
+  cfg.min_distance_cm = prefs.getFloat("pel_min", 10.3f);
+  cfg.capacity_kg = prefs.getFloat("pel_kg", 40.0f);
   cfg.low_threshold_percent = prefs.getFloat("pel_low", 20.0f);
   prefs.end();
 

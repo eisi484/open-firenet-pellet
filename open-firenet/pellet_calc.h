@@ -10,11 +10,11 @@ namespace pellet {
 
 struct PelletConfig {
   bool enabled = false;
-  int sda_pin = 9;
-  int scl_pin = 18;
-  float tank_height_cm = 70.0f;
-  float min_distance_cm = 0.5f;
-  float capacity_kg = 45.0f;
+  int sda_pin = 2;
+  int scl_pin = 4;
+  float tank_height_cm = 65.0f;
+  float min_distance_cm = 10.3f;
+  float capacity_kg = 40.0f;
   float low_threshold_percent = 20.0f;
 
   bool isValid() const {

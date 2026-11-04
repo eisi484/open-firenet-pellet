@@ -39,6 +39,23 @@ RIKA stoves use a USB CDC dongle (the "Firenet 2.0" stick) to connect to RIKA's 
 | ESP32-S3 dev board with native USB | The board must expose the S3's USB OTG pins (GPIO19/20 = D+/D−) on its USB connector. Any connector type works (USB-A, USB-C, Micro-B) as long as it is wired to the S3's native USB, not to a UART bridge chip. |
 | Cable to stove | The stove has a USB-A socket. Use whatever cable or adapter connects your board's USB port to USB-A Male (e.g. USB-C to USB-A, or USB-A to USB-A). |
 
+### Optional — Pellet Hopper Level Sensor (VL53L0X)
+
+An optional Time-of-Flight (ToF) distance sensor can be mounted inside the pellet hopper lid to measure fill level in real time.
+
+| Sensor Pin | ESP32-S3 Pin | Notes |
+|---|---|---|
+| VIN / VCC | 3V3 | Power supply (3.3V) |
+| GND | GND | Ground |
+| SDA | GPIO9 (default) | Configurable in web UI / API (100 kHz I2C) |
+| SCL | GPIO18 (default) | Configurable in web UI / API (100 kHz I2C) |
+
+> **Important pin notes**: Never use GPIO19 or GPIO20 (reserved for native USB CDC comms with the stove) or GPIO0 (Boot).
+>
+> **Disabled by default**: Sensor support is disabled out-of-the-box (`enabled: false`). No I2C bus scan or read operations occur until enabled in **Bridge > System** or via `POST /api/pellet`.
+>
+> **Non-blocking & failsafe**: Measurements run in a background task with a strict 50 ms timeout, ensuring no interference with USB communication. Readings pass through a 5-sample moving average filter with outlier rejection. If 3 consecutive read failures occur, readings cleanly revert to `null` and Home Assistant shows `unknown` until recovery.
+
 ### How it connects
 
 The stove acts as USB host; the ESP32-S3 acts as USB device (CDC class, VID `0x303A` / PID `0x819A`). The stove does not check the VID/PID: it only needs a CDC data interface, which the firmware provides.
@@ -399,6 +416,15 @@ Since firmware 4.0 the bridge answers its own page and programs on your network 
     "eco_mode": false,
     "eco_mode_possible": false
   },
+  "pellet": {
+    "available": true,
+    "level_percent": 29.9,
+    "remaining_kg": 13.5,
+    "distance_cm": 49.2,
+    "raw_distance_mm": 492,
+    "low_level": false,
+    "error_count": 0
+  },
   "version_ack": true,
   "version_frame": "V3",
   "generation": 1,
@@ -406,11 +432,51 @@ Since firmware 4.0 the bridge answers its own page and programs on your network 
 }
 ```
 
+- `pellet` is included in the state telemetry whenever the optional VL53L0X sensor is enabled. If the sensor is lost (3 consecutive read errors), `available` becomes `false` and the measurement fields revert to `null`.
 - `room_temperature` is `null` and `room_sensor_connected` is `false` when no RIKA room sensor is connected.
 - `stove.model`, `stove.model_name`, `stove.brand`, `stove.mainboard_version` and `stove.firmware_build` are `null` until the stove has sent them (the bridge is not linked yet).
 - `usb.host_connected` is `true` once a USB host (the stove) has detected the bridge on the board's native USB port, and `usb.rx_bytes` counts the bytes received from the stove since boot. `false` / `0` usually means the stove is plugged into the wrong port of the board (UART / COM), a charge-only cable, or a stove that is off.
 - `version_frame` tells which protocol variant the stove answered: `V3` (firmware 2.29), `V28` (2.28), `V1` (2.26 / 2.27). It is `?` as long as no text version frame was acknowledged, which is the case of a stove on firmware 2.25 (it speaks numeric frames, see [PROTOCOL.md](PROTOCOL.md)).
 - `raw_sensors` holds every value reported by the stove under its name; the names follow the official RIKA ones (`statusWarning`, `airFlaps`, `errCount0`...), see [PROTOCOL.md](PROTOCOL.md).
+
+### Pellet Tank Level API (`/api/pellet`)
+
+Manage settings for the optional VL53L0X Time-of-Flight pellet level sensor.
+
+#### `GET /api/pellet`
+Returns the saved configuration:
+```json
+{
+  "enabled": true,
+  "sda_pin": 9,
+  "scl_pin": 18,
+  "tank_height_cm": 70.0,
+  "min_distance_cm": 0.5,
+  "capacity_kg": 45.0,
+  "low_threshold_percent": 20.0
+}
+```
+
+#### `POST /api/pellet`
+Save configuration to NVS:
+```bash
+curl -X POST http://open-firenet.local/api/pellet \
+  -H "Content-Type: application/json" \
+  -d '{
+    "enabled": true,
+    "sda_pin": 9,
+    "scl_pin": 18,
+    "tank_height_cm": 70.0,
+    "min_distance_cm": 0.5,
+    "capacity_kg": 45.0,
+    "low_threshold_percent": 20.0
+  }'
+```
+Configuration rules:
+- `min_distance_cm < tank_height_cm`
+- `capacity_kg > 0`
+- `low_threshold_percent` between `0` and `100`
+- `sda_pin` and `scl_pin` cannot conflict with USB pins (19, 20) or boot pin (0)
 
 ### `POST /api/controls` (Direct controls & MultiAir)
 
@@ -536,12 +602,12 @@ Optional and off by default. The bridge can publish the stove state to an MQTT b
 | Topic | Direction | Content |
 |---|---|---|
 | `openfirenet/availability` | bridge → broker | `online` / `offline` (retained; `offline` is the last will, sent by the broker when the bridge disappears) |
-| `openfirenet/state` | bridge → broker | JSON with the `device`, `stove`, `sensors`, `controls` and `schedule` objects (retained). Published when something changes, at most every 5 s and at least every 60 s |
-| `openfirenet/<section>/<name>` | bridge → broker | The same values, one per topic (retained), e.g. `openfirenet/sensors/room_temperature`, `openfirenet/stove/state`, `openfirenet/controls/on`, `openfirenet/schedule/heatTimeMon1`. Published when the value changes |
+| `openfirenet/state` | bridge → broker | JSON with the `device`, `stove`, `sensors`, `controls`, `pellet` and `schedule` objects (retained). Published when something changes, at most every 5 s and at least every 60 s |
+| `openfirenet/<section>/<name>` | bridge → broker | The same values, one per topic (retained), e.g. `openfirenet/sensors/room_temperature`, `openfirenet/stove/state`, `openfirenet/controls/on`, `openfirenet/pellet/level_percent`, `openfirenet/pellet/remaining_kg`. Published when the value changes |
 | `openfirenet/set` | broker → bridge | A command as JSON, same fields as `POST /api/controls`, e.g. `{"on": true, "target_temperature": 21}` |
 | `openfirenet/set/<name>` | broker → bridge | One value, e.g. `openfirenet/set/target_temperature` with payload `21` (whole degrees), `openfirenet/set/on` with `true` / `false` / `ON` / `OFF`, `openfirenet/set/mode` with `manual` / `auto` / `comfort`, `openfirenet/set/power_percent` with `70` |
 
-`openfirenet` is the default base topic; change it if you have several bridges. `openfirenet/device/connected` tells whether the bridge is linked to the stove; until it is, only the `device` values are published.
+`openfirenet` is the default base topic; change it if you have several bridges. `openfirenet/device/connected` tells whether the bridge is linked to the stove; until it is, only the `device` values are published. When the optional pellet level sensor is enabled, topics under `openfirenet/pellet/` (`level_percent`, `remaining_kg`, `distance_cm`, `low_level`) are published as well.
 
 Notes:
 - Commands must not be published with the retain flag: a retained command is ignored, as the broker would replay it at every reconnection.
@@ -562,7 +628,7 @@ The status says "Certificate not trusted" when that check fails, and "Secure con
 
 ### Home Assistant discovery
 
-With **Home Assistant discovery** ticked in the MQTT card (off by default), the bridge also publishes the configuration messages of Home Assistant's MQTT integration, under `homeassistant/`: the stove then appears by itself in Home Assistant, as one device with a thermostat (on/off, target temperature, manual / auto / comfort presets), the heating power, the schedule, frost protection and eco mode switches, and the sensors (temperatures, pellets, service countdown, state, error and warning codes). Home Assistant needs its MQTT integration connected to the same broker.
+With **Home Assistant discovery** ticked in the MQTT card (off by default), the bridge also publishes the configuration messages of Home Assistant's MQTT integration, under `homeassistant/`: the stove then appears by itself in Home Assistant, as one device with a thermostat (on/off, target temperature, manual / auto / comfort presets), the heating power, the schedule, frost protection and eco mode switches, and the sensors (temperatures, pellets, service countdown, state, error and warning codes). When the pellet level sensor is enabled and online, 4 additional entities (Pellet Level %, Remaining kg, Distance cm, Low Pellet warning binary sensor) are automatically discovered. Home Assistant needs its MQTT integration connected to the same broker.
 
 Leave it off if you already use the [Open Firenet integration](#home-assistant-integration): you would get the stove twice. The integration remains the most complete way (MultiAir fans, weekly schedule slots, external temperature sensor). Unticking the option removes the entities from Home Assistant.
 

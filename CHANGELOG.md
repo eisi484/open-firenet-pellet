@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### New
+- Optional pellet hopper level measurement using a VL53L0X Time-of-Flight distance sensor over I2C. Disabled by default in NVS (`enabled: false`), with configurable SDA and SCL pins (default GPIO9 and GPIO18), tank height, minimum distance, tank capacity in kg, and low pellet threshold percentage.
+- Non-blocking I2C measurements executed in a dedicated background task (`Wire.setTimeOut(50)`), 5-sample moving average filtering with outlier rejection, and failsafe behavior (resets filter and reports `null` after 3 consecutive read errors).
+- REST API endpoint `/api/pellet` (GET & POST) and state telemetry in `/api/state` (`pellet` object).
+- MQTT telemetry topics (`openfirenet/pellet/level_percent`, `remaining_kg`, `distance_cm`, `low_level`) and Home Assistant MQTT auto-discovery (level %, remaining kg, distance cm, and low refill binary sensor).
+- Web UI: live pellet tank gauge card on the Stove page (customizable layout) and pellet sensor configuration in the Bridge tab across all supported languages (FR, EN, IT, DE, ES).
+
 ## v4.9.1 (2026-11-03)
 
 ### Fixes

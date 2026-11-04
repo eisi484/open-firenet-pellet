@@ -91,6 +91,7 @@ echo ""
 
 # Compile
 echo "[1/2] Compiling..."
+arduino-cli lib install "VL53L0X" 2>/dev/null || true
 arduino-cli compile \
   --fqbn "$FQBN" \
   --output-dir "$BUILD_DIR" \

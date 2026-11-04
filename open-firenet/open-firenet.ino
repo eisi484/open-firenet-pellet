@@ -18,6 +18,7 @@
 #include <ArduinoOTA.h>
 #include "firenet_update_task.h"
 #include <Preferences.h>
+#include <VL53L0X.h>
 #include <ESPmDNS.h>
 #include <DNSServer.h>
 #include "USB.h"
@@ -617,6 +618,10 @@ static void handleTxGap() {
 static void handlePellet() {
   if (web.method() == HTTP_OPTIONS) { web.send(204); return; }
   if (web.method() == HTTP_GET) {
+    if (web.hasArg("scan")) {
+      web.send(200, "application/json", firenet::pellet::g_pelletLevel.scanAllPins().c_str());
+      return;
+    }
     web.send(200, "application/json", firenet::pellet::g_pelletLevel.jsonConfig().c_str());
     return;
   }

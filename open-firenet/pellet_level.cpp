@@ -30,6 +30,11 @@ bool PelletManager::updateConfig(const PelletConfig& new_cfg) {
   config_ = new_cfg;
 
   if (enabled_changed || pins_changed) {
+#if defined(ARDUINO)
+    if (wire_initialized_) {
+      Wire.end();
+    }
+#endif
     wire_initialized_ = false;
     filter_.clear();
     result_.available = false;
@@ -43,28 +48,44 @@ void PelletManager::initSensor() {
 #if defined(ARDUINO) && OF_HAVE_VL53L0X
   if (!config_.enabled) return;
 
-  if (!wire_initialized_) {
-    Wire.begin(config_.sda_pin, config_.scl_pin, 100000);
-    Wire.setTimeOut(50);
-    wire_initialized_ = true;
+  if (wire_initialized_) {
+    Wire.end();
+    wire_initialized_ = false;
+  }
+
+  Wire.begin(config_.sda_pin, config_.scl_pin, 100000);
+  Wire.setTimeOut(50);
+  wire_initialized_ = true;
+  delay(10);
+
+  std::vector<int> found;
+  for (uint8_t addr = 1; addr < 127; ++addr) {
+    Wire.beginTransmission(addr);
+    if (Wire.endTransmission() == 0) {
+      found.push_back((int)addr);
+    }
   }
 
   Wire.beginTransmission(0x29);
   uint8_t err = Wire.endTransmission();
+  bool init_ok = false;
   if (err == 0) {
     sensor_.setBus(&Wire);
     sensor_.setTimeout(100);
     if (sensor_.init()) {
       sensor_.setMeasurementTimingBudget(50000); // 50 ms budget
-      std::lock_guard<std::mutex> lock(mutex_);
-      result_.available = true;
-      return;
+      init_ok = true;
     }
   }
 
   std::lock_guard<std::mutex> lock(mutex_);
-  result_.available = false;
-  result_.valid = false;
+  last_i2c_error_ = (int)err;
+  sensor_init_ok_ = init_ok;
+  found_addrs_ = found;
+  result_.available = init_ok;
+  if (!init_ok) {
+    result_.valid = false;
+  }
 #endif
 }
 
@@ -151,9 +172,18 @@ std::string PelletManager::jsonSection() const {
 
 std::string PelletManager::jsonConfig() const {
   std::lock_guard<std::mutex> lock(mutex_);
-  char buf[256];
+  std::string addrs_json = "[";
+  for (size_t i = 0; i < found_addrs_.size(); ++i) {
+    char hbuf[16];
+    snprintf(hbuf, sizeof(hbuf), "\"0x%02X\"", found_addrs_[i]);
+    if (i > 0) addrs_json += ",";
+    addrs_json += hbuf;
+  }
+  addrs_json += "]";
+
+  char buf[384];
   snprintf(buf, sizeof(buf),
-    "{\"enabled\":%s,\"sda_pin\":%d,\"scl_pin\":%d,\"tank_height_cm\":%.1f,\"min_distance_cm\":%.1f,\"capacity_kg\":%.1f,\"low_threshold_percent\":%.1f,\"max_duration_ms\":%u}",
+    "{\"enabled\":%s,\"sda_pin\":%d,\"scl_pin\":%d,\"tank_height_cm\":%.1f,\"min_distance_cm\":%.1f,\"capacity_kg\":%.1f,\"low_threshold_percent\":%.1f,\"max_duration_ms\":%u,\"last_i2c_error\":%d,\"sensor_init_ok\":%s,\"found_i2c_addrs\":%s}",
     config_.enabled ? "true" : "false",
     config_.sda_pin,
     config_.scl_pin,
@@ -161,9 +191,46 @@ std::string PelletManager::jsonConfig() const {
     config_.min_distance_cm,
     config_.capacity_kg,
     config_.low_threshold_percent,
-    (unsigned)max_duration_ms_
+    (unsigned)max_duration_ms_,
+    last_i2c_error_,
+    sensor_init_ok_ ? "true" : "false",
+    addrs_json.c_str()
   );
   return std::string(buf);
+}
+
+std::string PelletManager::scanAllPins() {
+#if defined(ARDUINO)
+  const int pins[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 21, 47};
+  const size_t n = sizeof(pins) / sizeof(pins[0]);
+
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (wire_initialized_) {
+    Wire.end();
+    wire_initialized_ = false;
+  }
+
+  for (size_t i = 0; i < n; ++i) {
+    for (size_t j = 0; j < n; ++j) {
+      if (i == j) continue;
+      int sda = pins[i];
+      int scl = pins[j];
+      Wire.begin(sda, scl, 100000);
+      Wire.setTimeOut(10);
+      Wire.beginTransmission(0x29);
+      uint8_t err = Wire.endTransmission();
+      Wire.end();
+      if (err == 0) {
+        char buf[128];
+        snprintf(buf, sizeof(buf), "{\"found\":true,\"sda_pin\":%d,\"scl_pin\":%d}", sda, scl);
+        return std::string(buf);
+      }
+    }
+  }
+  return "{\"found\":false}";
+#else
+  return "{\"found\":false}";
+#endif
 }
 
 #ifdef ARDUINO

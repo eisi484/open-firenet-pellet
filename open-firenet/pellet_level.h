@@ -54,6 +54,9 @@ class PelletManager {
   // Generates JSON for GET /api/pellet
   std::string jsonConfig() const;
 
+  // Scans all available GPIO pairs to locate VL53L0X
+  std::string scanAllPins();
+
 #ifdef ARDUINO
   void loadFromNvs(Preferences& prefs);
   void saveToNvs(Preferences& prefs);
@@ -72,6 +75,9 @@ class PelletManager {
   uint32_t last_probe_ms_ = 0;
   uint32_t max_duration_ms_ = 0;
   bool wire_initialized_ = false;
+  int last_i2c_error_ = -1;
+  bool sensor_init_ok_ = false;
+  std::vector<int> found_addrs_;
 
 #if defined(ARDUINO) && OF_HAVE_VL53L0X
   VL53L0X sensor_;

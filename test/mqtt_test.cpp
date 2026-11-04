@@ -109,6 +109,27 @@ int main() {
     mqtt::DiscoveryDevice unknown{"openfirenet_45eac8", "openfirenet", "", "", ""};
     mqtt::discoveryEntity(0, unknown, false, topic, payload);
     CH("discovery: model unknown yet", payload.find("\"model\":\"Pellet stove\"}}") != std::string::npos);
+
+    // Pellet discovery test
+    dev.has_pellet = true;
+    size_t n_pel = mqtt::discoveryCount(true);
+    CH("discovery: 4 pellet entities added", n_pel == n + 4);
+    bool seenLevel = false, seenRemaining = false, seenDist = false, seenLow = false;
+    for (size_t i = n; i < n_pel; i++) {
+      CH("discovery: pellet entity retrieved", mqtt::discoveryEntity(i, dev, false, topic, payload));
+      if (topic.find("/pellet_level_percent/") != std::string::npos) seenLevel = true;
+      if (topic.find("/pellet_remaining_kg/") != std::string::npos) seenRemaining = true;
+      if (topic.find("/pellet_distance_cm/") != std::string::npos) seenDist = true;
+      if (topic.find("/pellet_low/") != std::string::npos) seenLow = true;
+      // Pellet entities do not depend on the stove connection
+      CH("discovery: pellet entity availability independent of stove", payload.find("device/connected") == std::string::npos);
+    }
+    CH("discovery: all 4 pellet entities seen", seenLevel && seenRemaining && seenDist && seenLow);
+
+    // Pellet removal test
+    std::string remTopic, remPayload;
+    CH("discovery: pellet removal returns true", mqtt::discoveryEntity(n, dev, true, remTopic, remPayload));
+    CH("discovery: pellet removal payload is empty", remPayload.empty() && remTopic.find("/pellet_level_percent/") != std::string::npos);
   }
 
   std::cout << "mqtt: " << ok << " ok, " << ko << " failed\n";

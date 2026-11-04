@@ -108,6 +108,7 @@ struct DiscoveryDevice {
   std::string version;   // bridge firmware version
   std::string url;       // configuration URL, e.g. "http://192.168.1.50"
   std::string make = "RIKA";   // "RIKA" or "ANIMO"
+  bool has_pellet = false;
 };
 
 namespace detail {
@@ -203,6 +204,20 @@ static const Entity ENTITIES[] = {
   {"binary_sensor", "connected", "Connected",
    "\"state_topic\":\"~/device/connected\"," OF_BOOL "\"device_class\":\"connectivity\"," OF_DIAG},
 };
+
+static const Entity PELLET_ENTITIES[] = {
+  {"sensor", "pellet_level_percent", "Pellet Level",
+   "\"state_topic\":\"~/pellet/level_percent\"," OF_NULLABLE
+   "\"unit_of_measurement\":\"%\",\"state_class\":\"measurement\",\"icon\":\"mdi:gauge\","},
+  {"sensor", "pellet_remaining_kg", "Pellet Remaining",
+   "\"state_topic\":\"~/pellet/remaining_kg\"," OF_NULLABLE
+   "\"unit_of_measurement\":\"kg\",\"device_class\":\"weight\",\"state_class\":\"measurement\","},
+  {"sensor", "pellet_distance_cm", "Pellet Distance",
+   "\"state_topic\":\"~/pellet/distance_cm\"," OF_NULLABLE
+   "\"unit_of_measurement\":\"cm\",\"device_class\":\"distance\",\"state_class\":\"measurement\"," OF_DIAG},
+  {"binary_sensor", "pellet_low", "Pellet Refill",
+   "\"state_topic\":\"~/pellet/low\"," OF_NULLABLE OF_BOOL "\"device_class\":\"problem\","},
+};
 #undef OF_NULLABLE
 #undef OF_BOOL
 #undef OF_DIAG
@@ -217,24 +232,33 @@ inline std::string jsonEscape(const std::string& in) {
 }
 }  // namespace detail
 
-inline size_t discoveryCount() { return sizeof(detail::ENTITIES) / sizeof(detail::ENTITIES[0]); }
+inline size_t baseDiscoveryCount() { return sizeof(detail::ENTITIES) / sizeof(detail::ENTITIES[0]); }
+inline size_t pelletDiscoveryCount() { return sizeof(detail::PELLET_ENTITIES) / sizeof(detail::PELLET_ENTITIES[0]); }
+inline size_t discoveryCount(bool has_pellet = false) {
+  return baseDiscoveryCount() + (has_pellet ? pelletDiscoveryCount() : 0);
+}
 
 // Topic and configuration message of entity i. With remove = true the message is empty, which deletes the entity
 // from Home Assistant. Returns false past the last entity.
 inline bool discoveryEntity(size_t i, const DiscoveryDevice& dev, bool remove, std::string& topic, std::string& payload) {
-  if (i >= discoveryCount()) return false;
-  const detail::Entity& e = detail::ENTITIES[i];
+  const size_t baseN = baseDiscoveryCount();
+  const size_t pelN = pelletDiscoveryCount();
+  if (i >= baseN + pelN) return false;
+  const bool isPellet = (i >= baseN);
+  if (isPellet && !dev.has_pellet && !remove) return false;
+
+  const detail::Entity& e = isPellet ? detail::PELLET_ENTITIES[i - baseN] : detail::ENTITIES[i];
   topic = std::string("homeassistant/") + e.component + "/" + dev.id + "/" + e.key + "/config";
   payload.clear();
   if (remove) return true;
-  const bool linkEntity = std::string(e.key) == "connected";
+  const bool linkEntity = !isPellet && (std::string(e.key) == "connected");
   payload = "{\"~\":\"" + detail::jsonEscape(dev.base) + "\",";
   payload += e.name ? "\"name\":\"" + std::string(e.name) + "\"," : std::string("\"name\":null,");
   payload += "\"unique_id\":\"" + dev.id + "_" + e.key + "\",";
   payload += e.config;
-  // Available while the bridge is online and, except for the link sensor itself, while the stove is linked.
+  // Available while the bridge is online and, except for the link sensor and pellet sensors, while the stove is linked.
   payload += "\"availability\":[{\"topic\":\"~/availability\"}";
-  if (!linkEntity) payload += ",{\"topic\":\"~/device/connected\",\"payload_available\":\"true\",\"payload_not_available\":\"false\"}";
+  if (!linkEntity && !isPellet) payload += ",{\"topic\":\"~/device/connected\",\"payload_available\":\"true\",\"payload_not_available\":\"false\"}";
   payload += "],\"availability_mode\":\"all\",";
   // The device is described in every message: Home Assistant may read them in any order.
   payload += "\"device\":{\"identifiers\":[\"" + dev.id + "\"],\"name\":\"Open Firenet\",\"manufacturer\":\"" + detail::jsonEscape(dev.make) + "\",\"model\":\"" +

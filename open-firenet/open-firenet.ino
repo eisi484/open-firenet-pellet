@@ -52,6 +52,7 @@ static String g_dispBootBoard = kDefaultBoard; // the choice the running firmwar
 #include "mqtt_client.h"   // esp-mqtt, Espressif's MQTT client shipped with the ESP32 core
 #include "esp_crt_bundle.h" // public certificate authorities, to verify a broker reached over TLS
 #include "web_ui.h"
+#include "pellet_level.h"
 
 // Types used in function signatures are declared here, ahead of every function: the Arduino builder inserts its
 // generated prototypes before the first function of the sketch.
@@ -503,6 +504,8 @@ static String jsonState() {
   );
 
   String j = String(buf) + jsonStoveSections() + ",";
+  j += firenet::pellet::g_pelletLevel.jsonSection().c_str();
+  j += ",";
   j += "\"wifi_mode\":\"" + String(g_isApMode?"AP":"STA") + "\",";
   j += "\"ip\":\"" + (g_isApMode?WiFi.softAPIP():WiFi.localIP()).toString() + "\",";
   j += "\"wifi_connected\":" + String(WiFi.status()==WL_CONNECTED?"true":"false") + ",";
@@ -608,6 +611,46 @@ static void handleTxGap() {
            (unsigned)g_link->txGapMs(), (unsigned)firenet::DongleLink::TX_GAP_MS,
            (unsigned)firenet::DongleLink::TX_GAP_MIN_MS, (unsigned)firenet::DongleLink::TX_GAP_MAX_MS);
   web.send(200, "application/json", buf);
+}
+
+// GET/POST/PUT /api/pellet : lire et configurer le capteur de niveau de pellets (VL53L0X)
+static void handlePellet() {
+  if (web.method() == HTTP_OPTIONS) { web.send(204); return; }
+  if (web.method() == HTTP_GET) {
+    web.send(200, "application/json", firenet::pellet::g_pelletLevel.jsonConfig().c_str());
+    return;
+  }
+  if (web.method() != HTTP_POST && web.method() != HTTP_PUT) {
+    web.sendHeader("Allow", "GET, POST, PUT");
+    web.send(405, "application/json", "{\"ok\":false,\"error\":\"method_not_allowed\"}");
+    return;
+  }
+
+  firenet::pellet::PelletConfig cfg = firenet::pellet::g_pelletLevel.config();
+  std::vector<std::pair<std::string, std::string>> kv;
+  if (web.hasArg("plain")) firenet::jsonPairs(web.arg("plain").c_str(), kv);
+  for (int i = 0; i < web.args(); i++) {
+    if (web.argName(i) != "plain") kv.push_back({web.argName(i).c_str(), web.arg(i).c_str()});
+  }
+
+  for (const auto& p : kv) {
+    if (p.first == "enabled") cfg.enabled = (p.second == "true" || p.second == "1" || p.second == "on");
+    else if (p.first == "sda_pin") cfg.sda_pin = atoi(p.second.c_str());
+    else if (p.first == "scl_pin") cfg.scl_pin = atoi(p.second.c_str());
+    else if (p.first == "tank_height_cm") cfg.tank_height_cm = atof(p.second.c_str());
+    else if (p.first == "min_distance_cm") cfg.min_distance_cm = atof(p.second.c_str());
+    else if (p.first == "capacity_kg") cfg.capacity_kg = atof(p.second.c_str());
+    else if (p.first == "low_threshold_percent") cfg.low_threshold_percent = atof(p.second.c_str());
+  }
+
+  if (!cfg.isValid()) {
+    web.send(400, "application/json", "{\"ok\":false,\"error\":\"invalid_parameters\"}");
+    return;
+  }
+
+  firenet::pellet::g_pelletLevel.updateConfig(cfg);
+  firenet::pellet::g_pelletLevel.saveToNvs(prefs);
+  web.send(200, "application/json", firenet::pellet::g_pelletLevel.jsonConfig().c_str());
 }
 
 // ---------------------------------------------------------------- bridge health (issue #74)
@@ -1632,6 +1675,7 @@ static void mqttDiscoveryStep() {
   dev.make = g_mqttDiscMake.c_str();
   dev.version = OPENFIRENET_VERSION;
   dev.url = std::string("http://") + WiFi.localIP().toString().c_str();
+  dev.has_pellet = firenet::pellet::g_pelletLevel.isAvailable();
   std::string topic, payload;
   for (int n = 0; n < 4; n++) {
     if (!firenet::mqtt::discoveryEntity(g_mqttDiscNext, dev, g_mqttDiscRemove, topic, payload)) {
@@ -1649,12 +1693,34 @@ static void mqttDiscoveryStep() {
 static void mqttPublish() {
   const auto& m = g_link->model();
   bool linked = (m.version_ack && !m.sensors_pos.empty()) || m.v0_linked;
+  static bool s_lastPelletAvailable = false;
+  bool curPelletAvail = firenet::pellet::g_pelletLevel.isAvailable();
   if (g_mqttCfg.discovery) {
     // Announce again once the stove has told its model, so that the device shows it.
     long modelId = sensorValue(m, "model", -1);
     String model = (linked && modelId >= 0) ? String(getStoveModelName(modelId, sensorValue(m, "fabNumber", 1))) : String();
     String make = getStoveBrand(sensorValue(m, "fabNumber", 1));
     if ((model != g_mqttDiscModel || make != g_mqttDiscMake) && !g_mqttDiscRemove) { g_mqttDiscModel = model; g_mqttDiscMake = make; g_mqttDiscNext = 0; }
+
+    if (curPelletAvail != s_lastPelletAvailable) {
+      if (curPelletAvail) {
+        g_mqttDiscNext = 0;
+      } else {
+        // Sensor lost: remove the 4 discovery entities
+        uint8_t mac[6]; WiFi.macAddress(mac);
+        char id[32]; snprintf(id, sizeof id, "openfirenet_%02x%02x%02x", mac[3], mac[4], mac[5]);
+        firenet::mqtt::DiscoveryDevice dev;
+        dev.id = id; dev.base = g_mqttBase;
+        std::string topic, payload;
+        for (size_t i = firenet::mqtt::baseDiscoveryCount(); i < firenet::mqtt::discoveryCount(true); i++) {
+          if (firenet::mqtt::discoveryEntity(i, dev, true, topic, payload)) {
+            std::lock_guard<std::mutex> lk(g_mqttMx);
+            mqttOutboxPush(topic, payload);
+          }
+        }
+      }
+      s_lastPelletAvailable = curPelletAvail;
+    }
   }
   mqttDiscoveryStep();
   char dev[160];
@@ -1665,6 +1731,7 @@ static void mqttPublish() {
   String state;
   state.reserve(g_mqttStateSize);
   state += dev; state += ","; state += jsonHealth(true);
+  state += ","; state += firenet::pellet::g_pelletLevel.jsonSection().c_str();
   if (linked) { state += ","; state += jsonStoveSections(); state += ","; state += jsonScheduleSection(); }
   state += "}";
   if (state.length() > g_mqttStateSize) g_mqttStateSize = state.length() + 256;   // the next one fits at once
@@ -2028,6 +2095,7 @@ void setup() {
   web.on("/api/restart", HTTP_POST, handleRestart);
   web.on("/api/update", handleUpdate);
   web.on("/api/txgap", handleTxGap);
+  web.on("/api/pellet", handlePellet);
   web.on("/api/mqtt", handleMqtt);
   web.on("/api/access", handleAccess);
   web.on("/api/wifi_power_saving", handleWifiPowerSaving);
@@ -2060,6 +2128,8 @@ void setup() {
   static const char* WEB_HEADERS[] = {"Origin"};
   web.collectHeaders(WEB_HEADERS, 1);
   loadExtraHosts();
+  firenet::pellet::g_pelletLevel.loadFromNvs(prefs);
+  firenet::pellet::g_pelletLevel.begin();
   web.addMiddleware(webGuard);
   web.begin();
   DBG.println("[web] démarré (avec portail captif + compatibilité open-firenet)");

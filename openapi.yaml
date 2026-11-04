@@ -180,8 +180,45 @@ paths:
           description: The delay now in use
           content:
             application/json:
+  /api/pellet:
+    get:
+      tags: [Bridge]
+      summary: Pellet sensor configuration
+      description: Configuration and metrics of the optional VL53L0X pellet level sensor.
+      responses:
+        "200":
+          description: Current pellet sensor configuration
+          content:
+            application/json:
               schema:
-                $ref: "#/components/schemas/TxGap"
+                $ref: "#/components/schemas/PelletConfig"
+    post:
+      tags: [Bridge]
+      summary: Change pellet sensor configuration
+      description: Update settings of the optional VL53L0X pellet level sensor. Stored in NVS.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PelletCommand"
+            example:
+              enabled: true
+              sda_pin: 9
+              scl_pin: 18
+              tank_height_cm: 70
+              min_distance_cm: 0.5
+              capacity_kg: 45
+              low_threshold_percent: 20
+      responses:
+        "200":
+          description: The updated configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PelletConfig"
+        "400":
+          description: Invalid parameters
   /api/version:
     get:
       tags: [Bridge]
@@ -579,12 +616,13 @@ components:
         mqtt_disconnects: { type: integer, description: Connections to the broker lost since boot }
     State:
       type: object
-      required: [device, stove, sensors, controls, version_ack, usb, raw_sensors]
+      required: [device, stove, sensors, controls, version_ack, usb, raw_sensors, pellet]
       properties:
         device: { $ref: "#/components/schemas/Device" }
         stove: { $ref: "#/components/schemas/Stove" }
         sensors: { $ref: "#/components/schemas/Sensors" }
         controls: { $ref: "#/components/schemas/ControlsState" }
+        pellet: { $ref: "#/components/schemas/PelletState" }
         wifi_mode: { type: string, enum: [STA, AP], description: "`AP` while the bridge is in setup mode" }
         wifi_power_saving: { type: boolean, description: "Whether Wi-Fi power saving is on, see `/api/wifi_power_saving`" }
         ip: { type: string }
@@ -887,4 +925,35 @@ components:
           type: integer
           enum: [12, 24, 168]
           description: Check interval in hours
+    PelletState:
+      type: object
+      required: [available, distance_cm, level_percent, remaining_kg, low]
+      properties:
+        available: { type: boolean, description: Whether the pellet level sensor is connected and active }
+        distance_cm: { type: number, nullable: true, description: Distance to pellets in cm }
+        level_percent: { type: number, nullable: true, description: Fill level percentage }
+        remaining_kg: { type: number, nullable: true, description: Estimated remaining pellets in kg }
+        low: { type: boolean, nullable: true, description: True if fill level is below threshold }
+    PelletConfig:
+      type: object
+      required: [enabled, sda_pin, scl_pin, tank_height_cm, min_distance_cm, capacity_kg, low_threshold_percent, max_duration_ms]
+      properties:
+        enabled: { type: boolean, description: Whether the pellet sensor feature is enabled }
+        sda_pin: { type: integer, description: I2C SDA pin }
+        scl_pin: { type: integer, description: I2C SCL pin }
+        tank_height_cm: { type: number, description: Distance from sensor to bottom of empty tank in cm }
+        min_distance_cm: { type: number, description: Minimum distance from sensor to pellets when full in cm }
+        capacity_kg: { type: number, description: Total pellet capacity of the tank in kg }
+        low_threshold_percent: { type: number, description: Level percentage threshold for low pellet alert }
+        max_duration_ms: { type: integer, description: Maximum measured duration of a sensor read in ms }
+    PelletCommand:
+      type: object
+      properties:
+        enabled: { type: boolean }
+        sda_pin: { type: integer }
+        scl_pin: { type: integer }
+        tank_height_cm: { type: number }
+        min_distance_cm: { type: number }
+        capacity_kg: { type: number }
+        low_threshold_percent: { type: number }
 

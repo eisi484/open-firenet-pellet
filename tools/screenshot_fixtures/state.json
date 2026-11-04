@@ -12,6 +12,13 @@
   "free_heap": 123248,
   "connected": true
  },
+ "pellet": {
+  "available": false,
+  "distance_cm": null,
+  "level_percent": null,
+  "remaining_kg": null,
+  "low": null
+ },
  "stove": {
   "state": "standby",
   "state_code": 1,

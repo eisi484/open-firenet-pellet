@@ -9,6 +9,29 @@
 - MQTT telemetry topics (`openfirenet/pellet/level_percent`, `remaining_kg`, `distance_cm`, `low_level`) and Home Assistant MQTT auto-discovery (level %, remaining kg, distance cm, and low refill binary sensor).
 - Web UI: live pellet tank gauge card on the Stove page (customizable layout) and pellet sensor configuration in the Bridge tab across all supported languages (FR, EN, IT, DE, ES).
 
+## v5.1.0 (2026-11-15)
+
+### New
+- ANIMO stoves are shown under their own model name on the page, in the API and over MQTT: AVITO, AVITO SLIM, AVITO RAO, ADEVO, PURE, ADUO, AMITO, ARONDO and ADUO 2. Until now only the PURE was; the others showed the name of the RIKA model with the same number. By @openfirenet, with the help of @RemixQ, whose ANIMO PURE showed how the stove tells its make (#112).
+
+### Fixes
+- MultiAir on ANIMO stoves: the settings show by themselves on the ANIMO AVITO, PURE and ADUO, which ANIMO sells with MultiAir as an option, and no longer on the other ANIMO models whose number matched a RIKA MultiAir model (the ADEVO showed them as a ROCO MULTIAIR). On any other stove with MultiAir, the link "My stove has MultiAir: show its settings" stays. By @openfirenet.
+- Bridge > Screen: choosing the ESP32-S3 Pocket Dongle asked to confirm the LilyGO T-Dongle-S3; both questions now name the board you chose, and the warning above the choice names both boards. The Spanish texts no longer call the bridge "tecla". By @openfirenet.
+
+## v5.0.0 (2026-11-15)
+
+### New
+- ESP32-S3 Pocket Dongle (ESP32-S3 with 8 MB of PSRAM and a 0.96" colour screen): its screen can be switched on in the Bridge tab, Screen, by choosing "ESP32-S3 Pocket Dongle" as the board with a screen. It shows the same screens as on the LilyGO T-Dongle-S3. By @openfirenet.
+- Boards with octal PSRAM (8 or 16 MB), such as the Pocket Dongle: a PSRAM version of the firmware is published next to the standard one (`open-firenet-factory-psram.bin`, `open-firenet-ota-psram.bin`). On such a board it keeps the exchange log in PSRAM (256 kB by default) instead of the internal memory, which leaves more of it free. Why: on boards without PSRAM, the screen, MQTT and the secure connections used for updates all share the small internal memory. On a LilyGO T-Dongle-S3 it ran out (#121, #125), and the screen now has to be paused or switched off while the bridge checks for or downloads an update. The PSRAM gives them room. The standard version still runs on these boards, without their PSRAM or their screen. By @openfirenet, with the help of @StephaneM74, whose reports and tests on a LilyGO T-Dongle-S3 showed the memory running out (#121, #125).
+- On a board with octal PSRAM (8 or 16 MB), the firmware update of the page installs the PSRAM version, also when the board runs the standard one. Boards with quad PSRAM (2 MB, such as the ESP32-S3FH4R2 chips) are not supported by the PSRAM version: they keep the standard one, and the Diagnostics tab shows their PSRAM as "quad, not supported".
+- `/api/state` tells which version runs (`device.firmware_variant`: `standard` or `psram`), whether the chip has PSRAM and how much (`device.hardware_psram`, `device.hardware_psram_size`), whether the PSRAM version can use it (`device.psram_build_supported`), and the PSRAM the firmware uses (`device.psram_size`, `device.free_psram`). The Diagnostics tab shows the memory and the PSRAM.
+
+### Changes
+- Stoves on firmware 2.25: the bridge now sends a start even when the stove is still hot after a stop. The stove waits by itself until it has cooled down enough (139 °C at the flame sensor) before it ignites. Before, the bridge refused the start with "not accepted" until the flame sensor was under 100 °C. (#143) By @openfirenet, with the help of @ogushida-hue.
+
+### Fixes
+- Diagnostic file: the Wi-Fi name is now also masked in the stove's status frames of the log section, where the stove echoes it in another form than the bridge sent. (#145) By @openfirenet, with the help of @davidterranova.
+
 ## v4.9.1 (2026-11-03)
 
 ### Fixes

@@ -8,6 +8,7 @@ g++ -std=c++17 -Wall -I"$ROOT/open-firenet" -I"$ROOT" "$HERE/link_v0_test.cpp"  
 g++ -std=c++17 -Wall -I"$ROOT/open-firenet" -I"$ROOT" "$HERE/api_test.cpp"              -o /tmp/firenet_api_test && /tmp/firenet_api_test
 g++ -std=c++17 -Wall -I"$ROOT/open-firenet" -I"$ROOT" "$HERE/mqtt_test.cpp"             -o /tmp/firenet_mqtt_test && /tmp/firenet_mqtt_test
 g++ -std=c++17 -Wall -I"$ROOT/open-firenet" -I"$ROOT" "$HERE/pellet_calc_test.cpp"      -o /tmp/firenet_pellet_calc_test && /tmp/firenet_pellet_calc_test
+g++ -std=c++17 -Wall -I"$ROOT/open-firenet" -I"$ROOT" "$HERE/extension_test.cpp"        -o /tmp/firenet_extension_test && /tmp/firenet_extension_test
 g++ -std=c++17 -Wall -I"$ROOT/open-firenet" -I"$ROOT" "$HERE/host_bridge.cpp"           -o /tmp/host_bridge
 g++ -std=c++17 -Wall -I"$ROOT/open-firenet" -I"$ROOT" "$HERE/web_guard_test.cpp"       -o /tmp/firenet_web_guard_test && /tmp/firenet_web_guard_test
 g++ -std=c++17 -Wall -I"$ROOT/open-firenet" -I"$ROOT" "$HERE/update_verify_test.cpp"    -o /tmp/firenet_update_verify_test && /tmp/firenet_update_verify_test

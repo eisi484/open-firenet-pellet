@@ -56,7 +56,10 @@ static String g_dispBootBoard = kDefaultBoard; // the choice the running firmwar
 #include "mqtt_client.h"   // esp-mqtt, Espressif's MQTT client shipped with the ESP32 core
 #include "esp_crt_bundle.h" // public certificate authorities, to verify a broker reached over TLS
 #include "web_ui.h"
-#include "pellet_level.h"
+#include "firenet_extension_manager.h"
+#include "pellet_extension.h"
+static firenet::ExtensionManager g_extMgr;
+static firenet::PelletExtension g_pelletExt;
 
 
 // Types used in function signatures are declared here, ahead of every function: the Arduino builder inserts its
@@ -541,7 +544,9 @@ static String jsonState() {
   );
 
   String j = String(buf) + jsonStoveSections() + ",";
-  j += firenet::pellet::g_pelletLevel.jsonSection().c_str();
+  j += g_pelletExt.legacyJsonSection().c_str();
+  j += ",";
+  j += g_extMgr.jsonState().c_str();
   j += ",";
   j += "\"wifi_mode\":\"" + String(g_isApMode?"AP":"STA") + "\",";
   j += "\"ip\":\"" + (g_isApMode?WiFi.softAPIP():WiFi.localIP()).toString() + "\",";
@@ -650,15 +655,28 @@ static void handleTxGap() {
   web.send(200, "application/json", buf);
 }
 
-// GET/POST/PUT /api/pellet : lire et configurer le capteur de niveau de pellets (VL53L0X)
+// GET/POST/PUT /api/pellet : lire et configurer le capteur de niveau de pellets (compatibilité)
 static void handlePellet() {
   if (web.method() == HTTP_OPTIONS) { web.send(204); return; }
   if (web.method() == HTTP_GET) {
     if (web.hasArg("scan")) {
-      web.send(200, "application/json", firenet::pellet::g_pelletLevel.scanAllPins().c_str());
+      char sbuf[128];
+      snprintf(sbuf, sizeof(sbuf), "{\"found\":%s,\"sda_pin\":%d,\"scl_pin\":%d}",
+               g_extMgr.i2cBus().isReady() ? "true" : "false",
+               g_extMgr.i2cBus().sda(), g_extMgr.i2cBus().scl());
+      web.send(200, "application/json", sbuf);
       return;
     }
-    web.send(200, "application/json", firenet::pellet::g_pelletLevel.jsonConfig().c_str());
+    char buf[384];
+    auto cfg = g_pelletExt.pelletConfig();
+    snprintf(buf, sizeof(buf),
+      "{\"enabled\":%s,\"sda_pin\":%d,\"scl_pin\":%d,\"tank_height_cm\":%.1f,\"min_distance_cm\":%.1f,\"capacity_kg\":%.1f,\"low_threshold_percent\":%.1f,\"sensor_init_ok\":%s,\"found_i2c_addrs\":[\"0x29\"]}",
+      g_extMgr.isEnabled("pellet_level") ? "true" : "false",
+      g_extMgr.i2cBus().sda() >= 0 ? g_extMgr.i2cBus().sda() : 2,
+      g_extMgr.i2cBus().scl() >= 0 ? g_extMgr.i2cBus().scl() : 4,
+      cfg.tank_height_cm, cfg.min_distance_cm, cfg.capacity_kg, cfg.low_threshold_percent,
+      g_pelletExt.isRunning() ? "true" : "false");
+    web.send(200, "application/json", buf);
     return;
   }
   if (web.method() != HTTP_POST && web.method() != HTTP_PUT) {
@@ -667,31 +685,97 @@ static void handlePellet() {
     return;
   }
 
-  firenet::pellet::PelletConfig cfg = firenet::pellet::g_pelletLevel.config();
   std::vector<std::pair<std::string, std::string>> kv;
   if (web.hasArg("plain")) firenet::jsonPairs(web.arg("plain").c_str(), kv);
   for (int i = 0; i < web.args(); i++) {
     if (web.argName(i) != "plain") kv.push_back({web.argName(i).c_str(), web.arg(i).c_str()});
   }
 
+  bool enabled = g_extMgr.isEnabled("pellet_level");
+  int sda = g_extMgr.i2cBus().sda() >= 0 ? g_extMgr.i2cBus().sda() : 2;
+  int scl = g_extMgr.i2cBus().scl() >= 0 ? g_extMgr.i2cBus().scl() : 4;
+  std::map<std::string, std::string> ext_cfg;
+
   for (const auto& p : kv) {
-    if (p.first == "enabled") cfg.enabled = (p.second == "true" || p.second == "1" || p.second == "on");
-    else if (p.first == "sda_pin") cfg.sda_pin = atoi(p.second.c_str());
-    else if (p.first == "scl_pin") cfg.scl_pin = atoi(p.second.c_str());
-    else if (p.first == "tank_height_cm") cfg.tank_height_cm = atof(p.second.c_str());
-    else if (p.first == "min_distance_cm") cfg.min_distance_cm = atof(p.second.c_str());
-    else if (p.first == "capacity_kg") cfg.capacity_kg = atof(p.second.c_str());
-    else if (p.first == "low_threshold_percent") cfg.low_threshold_percent = atof(p.second.c_str());
+    if (p.first == "enabled") enabled = (p.second == "true" || p.second == "1" || p.second == "on");
+    else if (p.first == "sda_pin") sda = atoi(p.second.c_str());
+    else if (p.first == "scl_pin") scl = atoi(p.second.c_str());
+    else ext_cfg[p.first] = p.second;
   }
 
-  if (!cfg.isValid()) {
-    web.send(400, "application/json", "{\"ok\":false,\"error\":\"invalid_parameters\"}");
+  std::string err;
+  if (!g_extMgr.configureI2CPins(sda, scl, &err)) {
+    web.send(400, "application/json", ("{\"ok\":false,\"error\":\"" + err + "\"}").c_str());
+    return;
+  }
+  if (!g_extMgr.setExtensionConfig("pellet_level", enabled, ext_cfg, &err)) {
+    web.send(400, "application/json", ("{\"ok\":false,\"error\":\"" + err + "\"}").c_str());
     return;
   }
 
-  firenet::pellet::g_pelletLevel.updateConfig(cfg);
-  firenet::pellet::g_pelletLevel.saveToNvs(prefs);
-  web.send(200, "application/json", firenet::pellet::g_pelletLevel.jsonConfig().c_str());
+  g_extMgr.saveToNvs(prefs);
+  handlePellet();
+}
+
+// GET/POST/PUT /api/extensions : gestionnaire générique d'extensions
+static void handleExtensions() {
+  if (web.method() == HTTP_OPTIONS) { web.send(204); return; }
+  if (web.method() == HTTP_GET) {
+    web.send(200, "application/json", g_extMgr.jsonExtensions().c_str());
+    return;
+  }
+  if (web.method() != HTTP_POST && web.method() != HTTP_PUT) {
+    web.sendHeader("Allow", "GET, POST, PUT");
+    web.send(405, "application/json", "{\"ok\":false,\"error\":\"method_not_allowed\"}");
+    return;
+  }
+
+  String body = web.arg("plain");
+  std::vector<std::pair<std::string, std::string>> kv;
+  if (!body.isEmpty()) firenet::jsonPairs(body.c_str(), kv);
+  for (int i = 0; i < web.args(); i++) {
+    if (web.argName(i) != "plain") kv.push_back({web.argName(i).c_str(), web.arg(i).c_str()});
+  }
+
+  std::string action;
+  int sda = -1, scl = -1;
+  std::string ext_id;
+  bool ext_enabled = false;
+  bool have_enabled = false;
+  std::map<std::string, std::string> ext_cfg;
+
+  for (const auto& p : kv) {
+    if (p.first == "action") action = p.second;
+    else if (p.first == "sda" || p.first == "i2c_sda") sda = atoi(p.second.c_str());
+    else if (p.first == "scl" || p.first == "i2c_scl") scl = atoi(p.second.c_str());
+    else if (p.first == "id") ext_id = p.second;
+    else if (p.first == "enabled") { ext_enabled = (p.second == "true" || p.second == "1"); have_enabled = true; }
+    else ext_cfg[p.first] = p.second;
+  }
+
+  std::string err;
+  if (action == "i2c" || (sda >= 0 && scl >= 0 && ext_id.empty())) {
+    if (!g_extMgr.configureI2CPins(sda, scl, &err)) {
+      web.send(400, "application/json", ("{\"ok\":false,\"error\":\"" + err + "\"}").c_str());
+      return;
+    }
+    g_extMgr.saveToNvs(prefs);
+    web.send(200, "application/json", g_extMgr.jsonExtensions().c_str());
+    return;
+  }
+
+  if (!ext_id.empty()) {
+    if (!have_enabled) ext_enabled = g_extMgr.isEnabled(ext_id);
+    if (!g_extMgr.setExtensionConfig(ext_id, ext_enabled, ext_cfg, &err)) {
+      web.send(400, "application/json", ("{\"ok\":false,\"error\":\"" + err + "\"}").c_str());
+      return;
+    }
+    g_extMgr.saveToNvs(prefs);
+    web.send(200, "application/json", g_extMgr.jsonExtensions().c_str());
+    return;
+  }
+
+  web.send(400, "application/json", "{\"ok\":false,\"error\":\"missing action or id\"}");
 }
 
 // ---------------------------------------------------------------- bridge health (issue #74)
@@ -1740,7 +1824,7 @@ static void mqttDiscoveryStep() {
   dev.make = g_mqttDiscMake.c_str();
   dev.version = OPENFIRENET_VERSION;
   dev.url = std::string("http://") + WiFi.localIP().toString().c_str();
-  dev.has_pellet = firenet::pellet::g_pelletLevel.isAvailable();
+  dev.has_pellet = g_pelletExt.isRunning() && g_pelletExt.isHealthy();
   std::string topic, payload;
   for (int n = 0; n < 4; n++) {
     if (!firenet::mqtt::discoveryEntity(g_mqttDiscNext, dev, g_mqttDiscRemove, topic, payload)) {
@@ -1759,7 +1843,7 @@ static void mqttPublish() {
   const auto& m = g_link->model();
   bool linked = (m.version_ack && !m.sensors_pos.empty()) || m.v0_linked;
   static bool s_lastPelletAvailable = false;
-  bool curPelletAvail = firenet::pellet::g_pelletLevel.isAvailable();
+  bool curPelletAvail = g_pelletExt.isRunning() && g_pelletExt.isHealthy();
   if (g_mqttCfg.discovery) {
     // Announce again once the stove has told its model, so that the device shows it.
     long modelId = sensorValue(m, "model", -1);
@@ -1796,7 +1880,8 @@ static void mqttPublish() {
   String state;
   state.reserve(g_mqttStateSize);
   state += dev; state += ","; state += jsonHealth(true);
-  state += ","; state += firenet::pellet::g_pelletLevel.jsonSection().c_str();
+  state += ","; state += g_pelletExt.legacyJsonSection().c_str();
+  state += ","; state += g_extMgr.jsonState().c_str();
   if (linked) { state += ","; state += jsonStoveSections(); state += ","; state += jsonScheduleSection(); }
   state += "}";
   if (state.length() > g_mqttStateSize) g_mqttStateSize = state.length() + 256;   // the next one fits at once
@@ -2184,6 +2269,7 @@ void setup() {
   web.on("/api/update", handleUpdate);
   web.on("/api/txgap", handleTxGap);
   web.on("/api/pellet", handlePellet);
+  web.on("/api/extensions", handleExtensions);
   web.on("/api/mqtt", handleMqtt);
   web.on("/api/access", handleAccess);
   web.on("/api/wifi_power_saving", handleWifiPowerSaving);
@@ -2216,8 +2302,10 @@ void setup() {
   static const char* WEB_HEADERS[] = {"Origin"};
   web.collectHeaders(WEB_HEADERS, 1);
   loadExtraHosts();
-  firenet::pellet::g_pelletLevel.loadFromNvs(prefs);
-  firenet::pellet::g_pelletLevel.begin();
+  g_extMgr.pinRegistry().reserveBoardDisplay(g_dispBootBoard.c_str());
+  g_extMgr.registerExtension(&g_pelletExt);
+  g_extMgr.loadFromNvs(prefs);
+  g_extMgr.begin();
   web.addMiddleware(webGuard);
   web.begin();
   DBG.println("[web] démarré (avec portail captif + compatibilité open-firenet)");
@@ -2361,6 +2449,7 @@ void loop() {
 
   ArduinoOTA.handle();
   if (g_updater) g_updater->poll();
+  g_extMgr.poll();
   // A freshly installed image stays "pending" until it has run for a while on Wi-Fi; if it never gets there, the next
   // restart brings the previous image back.
   if (!g_imageConfirmed && g_wifiUp && millis() > 30000) { g_imageConfirmed = true; esp_ota_mark_app_valid_cancel_rollback(); }

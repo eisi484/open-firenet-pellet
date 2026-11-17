@@ -219,6 +219,23 @@ paths:
                 $ref: "#/components/schemas/PelletConfig"
         "400":
           description: Invalid parameters
+  /api/extensions:
+    get:
+      tags: [Bridge]
+      summary: Extensions and shared bus status
+      description: Lists all available extensions, their schema, and shared I2C bus status.
+      responses:
+        "200":
+          description: Extensions status and schemas
+    post:
+      tags: [Bridge]
+      summary: Configure an extension or I2C bus
+      description: Configure extension settings or shared I2C bus pins.
+      responses:
+        "200":
+          description: The updated extensions status
+        "400":
+          description: Invalid configuration or pin conflict
   /api/version:
     get:
       tags: [Bridge]

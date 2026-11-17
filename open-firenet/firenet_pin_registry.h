@@ -49,6 +49,18 @@ class PinRegistry {
     }
   }
 
+  void reserveBoardEthernet(const std::string& board) {
+    if (board == "waveshare_s3_eth") {
+      // Waveshare ESP32-S3-ETH: CS=14, INT=10, RST=9, SCLK=13, MISO=12, MOSI=11
+      reserve(14, "ethernet");
+      reserve(10, "ethernet");
+      reserve(9, "ethernet");
+      reserve(13, "ethernet");
+      reserve(12, "ethernet");
+      reserve(11, "ethernet");
+    }
+  }
+
   bool isAvailable(int pin, std::string* reason = nullptr) const {
     if (pin < 0 || pin > 48) {
       if (reason) *reason = "Invalid GPIO pin (must be 0..48)";

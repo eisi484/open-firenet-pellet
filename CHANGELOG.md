@@ -1,13 +1,15 @@
 # Changelog
 
-## Non publié
+## Unreleased
 
 ### New
-- Optional pellet hopper level measurement using a VL53L0X Time-of-Flight distance sensor over I2C. Disabled by default in NVS (`enabled: false`), with configurable SDA and SCL pins (default GPIO9 and GPIO18), tank height, minimum distance, tank capacity in kg, and low pellet threshold percentage.
-- Non-blocking I2C measurements executed in a dedicated background task (`Wire.setTimeOut(50)`), 5-sample moving average filtering with outlier rejection, and failsafe behavior (resets filter and reports `null` after 3 consecutive read errors).
-- REST API endpoint `/api/pellet` (GET & POST) and state telemetry in `/api/state` (`pellet` object).
-- MQTT telemetry topics (`openfirenet/pellet/level_percent`, `remaining_kg`, `distance_cm`, `low_level`) and Home Assistant MQTT auto-discovery (level %, remaining kg, distance cm, and low refill binary sensor).
-- Web UI: live pellet tank gauge card on the Stove page (customizable layout) and pellet sensor configuration in the Bridge tab across all supported languages (FR, EN, IT, DE, ES).
+- Wired Ethernet support for the Waveshare ESP32-S3-ETH (W5500), with a translated Connection selector, save/cancel controls and hardware confirmations. Ethernet mode hides Wi-Fi settings and opens a recovery hotspot after 20 seconds without an address. Saving Wi-Fi credentials through the API or installer switches back to Wi-Fi. The MQTT status "waiting for Wi-Fi" is now "waiting for network".
+- Modular extension system (`firenet::Extension`) with pin collision prevention (`firenet::PinRegistry`), shared I2C bus (`firenet::I2CBus`), and generic `/api/extensions` endpoint.
+- Optional pellet hopper level measurement using a VL53L0X Time-of-Flight distance sensor over I2C. Disabled by default in NVS (`enabled: false`), with configurable SDA and SCL pins, tank height, minimum distance, tank capacity in kg, and low pellet threshold percentage.
+- Non-blocking I2C measurements with moving average filtering and failsafe auto-disable behavior.
+- REST API endpoint `/api/pellet` and `/api/extensions`, state telemetry in `/api/state` (`extensions` and backwards-compatible `pellet` object).
+- MQTT telemetry topics and Home Assistant auto-discovery.
+- Web UI: live pellet tank gauge card on the Stove page and configuration in the Bridge tab.
 
 ## v5.1.0 (2026-11-15)
 
